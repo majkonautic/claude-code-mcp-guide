@@ -2,6 +2,16 @@
 
 A complete guide for adding MCP servers to Claude Code, including both cloud-based and local Docker-based MCPs.
 
+## ⚠️ Important: Environment Variables
+
+### For Cloud MCPs
+- `.env` file must be in your **Claude Code project folder** (root directory)
+- Never commit actual API keys to version control
+
+### For Local MCPs  
+- `.env` file goes **inside the MCP folder** (e.g., `supabase-cli-mcp/.env`)
+- This is handled during the setup process
+
 ## What is MCP?
 
 MCP (Model Context Protocol) allows Claude to interact with external tools and services. This guide shows you how to set up both cloud MCPs and local MCPs.
@@ -55,7 +65,25 @@ curl -O https://raw.githubusercontent.com/majkonautic/claude-code-mcp-guide/main
 chmod +x mcp-http-bridge.py
 ```
 
-2. Add to Claude:
+2. **Create `.env` file in your Claude Code project folder** with the required variables for your MCP:
+```bash
+# Example .env file (in Claude Code project root)
+# AWS MCP
+AWS_ACCESS_KEY_ID=your_access_key_here
+AWS_SECRET_ACCESS_KEY=your_secret_key_here
+AWS_DEFAULT_REGION=us-east-1
+AWS_REGION=us-east-1
+AWS_ACCOUNT_ID=your_account_id_here
+
+# Airtable MCP
+AIRTABLE_API_KEY=your_api_key_here
+AIRTABLE_BASE_ID=your_base_id_here
+AIRTABLE_TABLE_NAME="your_table_name"
+
+# Add other service credentials as needed
+```
+
+3. Add to Claude:
 ```bash
 claude mcp add [service-name] python3 mcp-http-bridge.py [service-url]
 ```
@@ -63,6 +91,8 @@ claude mcp add [service-name] python3 mcp-http-bridge.py [service-url]
 ## Setting Up Local MCPs
 
 See our [Supabase CLI MCP Template](https://github.com/majkonautic/Supabase-CLI-MCP-template) for a complete example.
+
+**Important:** For local MCPs, the `.env` file should be placed **inside the MCP folder** (e.g., `supabase-cli-mcp/.env`). This is handled as part of the setup process.
 
 ## Managing MCPs
 
