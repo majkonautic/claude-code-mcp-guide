@@ -1,218 +1,169 @@
 
 # Claude Code MCP (Model Context Protocol) Guide
 
-A complete guide for adding MCP servers to Claude Code, including both cloud-based and local Docker-based MCPs.
+A complete guide for adding **remote MCPs** to Claude Code, using folder-based secrets and a shared bridge.
 
 ---
 
-## 📁 Project Structure
+## 📁 Project Layout
 
-Clone this repo into the **root of your Claude Code project** like this:
+After cloning this repo into your Claude Code project root:
 
 ```
 
-your-claude-code-project/
+your-project/
 ├── claude-code-mcp-guide/
-│   ├── README.md
 │   ├── add\_remote\_mcp.sh
 │   └── mcp/
-│       ├── mcp-http-bridge.py           # Shared bridge script (copied during setup)
+│       ├── mcp-http-bridge.py
 │       └── example\_mcp/
-│           └── .env.example             # Example template for your own MCPs
+│           └── .env.example
 
 ```
 
-After running the setup script, the following will be created:
+After running the script:
 
 ```
 
 ├── .claude/
 │   └── mcp/
 │       ├── airtable/
-│       │   └── .env                     # Your service-specific secrets
-│       └── mcp-http-bridge.py          # Copied bridge used for Claude integration
+│       │   └── .env
+│       └── mcp-http-bridge.py
 
 ````
+
+---
+
+## 🧠 What is this for?
+
+Claude uses **MCPs** (Model Context Protocols) to call external services.
+
+This setup helps you:
+- Add remote (cloud-hosted) MCPs with secrets
+- Isolate config per MCP
+- Use the same bridge for all MCPs
 
 ---
 
 ## 🛠️ Initial Setup
 
-1. From the **root of your Claude Code project**, clone this guide:
+1. From your project root:
 
 ```bash
 git clone https://github.com/majkonautic/claude-code-mcp-guide
 ````
 
-2. Run the interactive setup wizard:
+2. Set up Python environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r claude-code-mcp-guide/mcp/requirements.txt
+```
+
+3. Add your first MCP:
 
 ```bash
 cd claude-code-mcp-guide
 ./add_remote_mcp.sh
 ```
 
-This will:
-
-* Prompt you for:
-
-  * MCP name (e.g., `airtable`)
-  * MCP URL (e.g., `https://airtable.mcp.example.com`)
-  * MCP API key (optional)
-  * Any number of service-specific secrets (e.g. `AIRTABLE_BASE_ID`, `SUPABASE_DB_URL`)
-* Create a folder at `.claude/mcp/<your-name>/`
-* Write all values into `.env`
-* Copy the bridge script (`mcp-http-bridge.py`) to `.claude/mcp/`
-
 ---
 
-## ✅ Registering MCPs (Always from Project Root)
+## 🧪 Example: Airtable MCP
 
-After setup, **register the MCP from your project root** like this:
+When prompted:
 
-```bash
-claude mcp add <name> python3 .claude/mcp/mcp-http-bridge.py
+* MCP name: `airtable`
+* MCP URL: `https://codibly-airtable.mcp.majewscy.tech/`
+* MCP API Key: (paste securely)
+* Extra secret: `AIRTABLE_BASE_ID=appXXXX`
+
+Your `.env` will be created in:
+
 ```
-
-Example:
-
-```bash
-claude mcp add airtable python3 .claude/mcp/mcp-http-bridge.py
-```
-
-> 🛑 **Important:** Never run `claude mcp add` from inside `.claude/mcp/<name>/`.
-> Claude stores paths relative to your current working directory — using the wrong location will break registration.
-
----
-
-## 🔁 Adding More MCPs
-
-To create and configure more MCPs, repeat:
-
-```bash
-cd claude-code-mcp-guide
-./add_remote_mcp.sh
-```
-
-Each one gets:
-
-* Its own folder under `.claude/mcp/`
-* Its own `.env` file
-* Shared use of `mcp-http-bridge.py`
-
----
-
-## 📄 Example: Airtable MCP
-
-```bash
-cd claude-code-mcp-guide
-./add_remote_mcp.sh
-
-# MCP Name: airtable
-# MCP URL: https://airtable.mcp.example.com
-# MCP API Key: sk_test_airtable_123
-# Additional secret: AIRTABLE_BASE_ID=appXXXX
-# Additional secret: AIRTABLE_API_KEY=patYYYY
-```
-
-Then, from project root:
-
-```bash
-claude mcp add airtable python3 .claude/mcp/mcp-http-bridge.py
+.claude/mcp/airtable/.env
 ```
 
 ---
 
-## 🧪 Example Template
+## 🤖 Registering with Claude
 
-You can use the included template at:
+From your **project root**, run:
 
+```bash
+claude mcp add airtable python3 .claude/mcp/mcp-http-bridge.py https://codibly-airtable.mcp.majewscy.tech/ .claude/mcp/airtable/
 ```
-claude-code-mcp-guide/mcp/example_mcp/.env.example
-```
 
-To bootstrap your own config folders by copying and editing.
+✅ MCP name can be anything
+✅ `.env` folder path defines which secrets to use
+✅ `MCP_URL` can be passed or loaded from `.env`
 
 ---
 
-## 🔒 Security
+## 🧰 Public vs Private MCPs
 
-* Secrets are stored only in `.claude/mcp/<name>/.env`
-* `.env` files are **not committed**
-* Each service is isolated
-* `mcp-http-bridge.py` injects `X-API-Key` and other headers automatically
+| Use Case                 | Command Example                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| ✅ Public MCP (no auth)   | `claude mcp add my-public https://my-server.com`                                            |
+| 🔐 Private MCP (API key) | `claude mcp add secure python3 .claude/mcp/mcp-http-bridge.py $MCP_URL .claude/mcp/secure/` |
 
 ---
 
 ## 📦 Managing MCPs
 
 ```bash
-claude mcp list                # List all registered MCPs
-claude mcp remove <name>       # Remove an MCP
-claude mcp logs <name>         # View logs for a running MCP
+claude mcp list
+claude mcp logs [name]
+claude mcp remove [name]
 ```
 
 ---
 
-Absolutely. Here's the final **updated `README.md` section** to include both the **bridge capabilities** and the **recommendation flow**, formatted cleanly and ready to paste directly into your markdown:
+## 🔐 Secrets & Security
+
+* Secrets go in `.claude/mcp/[name]/.env`
+* Never commit `.env` to version control
+* Each MCP uses its own folder
 
 ---
 
-## 🔄 Bridge vs Direct MCP Registration
+## 🧱 Creating a New MCP Folder Manually
 
-You can add a Claude MCP in two ways:
-
-### ✅ 1. Using **Direct URL** (no script)
-
-Use this when your MCP is **public and doesn't require authentication**:
+You can copy the example:
 
 ```bash
-claude mcp add my-public-mcp https://your-mcp.example.com
+cp -r claude-code-mcp-guide/mcp/example_mcp .claude/mcp/my-service
+mv .claude/mcp/my-service/.env.example .env
+# Fill in your own MCP_URL, MCP_API_KEY, etc.
 ```
 
-> ❗ Not suitable for private or secret-driven services
+---
+
+## 🧪 Requirements
+
+```txt
+# claude-code-mcp-guide/mcp/requirements.txt
+python-dotenv>=1.0.0
+```
 
 ---
 
-### ✅ 2. Using **Bridge Script** (`python3 mcp-http-bridge.py ...`)
+## 🧠 Prompt Claude to Use It
 
-Use this when your MCP:
+```markdown
+I'm using a remote MCP named `airtable`. Please list its tools and use them via:
 
-* Requires `X-API-Key` headers
-* Needs injected secrets (e.g. Airtable API keys)
-* Is hosted securely
-* Should load dynamic env files per instance
-
----
-
-### ⚙️ What the Bridge Enables
-
-| Feature                               | Native URL | Bridge Required |
-| ------------------------------------- | ---------- | --------------- |
-| Add MCP with **no auth**              | ✅          | ❌               |
-| Add MCP with **X-API-Key**            | ❌          | ✅               |
-| Inject **.env secrets**               | ❌          | ✅               |
-| Mask / override **headers**           | ❌          | ✅               |
-| Use MCP from **hidden/secure folder** | ❌          | ✅               |
+claude mcp add airtable python3 .claude/mcp/mcp-http-bridge.py https://codibly-airtable.mcp.majewscy.tech/ .claude/mcp/airtable/
+```
 
 ---
-
-### ✅ Recommendation Flow
-
-| Use Case                    | What to do                                                                                             |
-| --------------------------- | ------------------------------------------------------------------------------------------------------ |
-| ✅ Public MCP (no auth)      | `claude mcp add my-mcp https://my-public-mcp.com`                                                      |
-| 🔐 Private MCP with API key | `claude mcp add my-mcp python3 .claude/mcp/mcp-http-bridge.py https://mcp.url.com .claude/mcp/my-mcp/` |
-
-> 💡 Use the bridge any time your MCP setup includes secrets, access control, or folder-specific configuration.
-
----
-
 
 ## 🤝 Contributing
 
-PRs welcome for:
+Feel free to open a PR with:
 
-* New `.env.example` templates
-* Service-specific integrations (e.g., Notion, AWS)
+* More `.env.example` templates
+* Additional integrations
 * Improvements to `add_remote_mcp.sh`
-
