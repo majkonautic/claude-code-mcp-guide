@@ -7,97 +7,114 @@ A complete guide for adding MCP servers to Claude Code, including both cloud-bas
 
 ## 📁 Project Structure
 
-Clone this repo into the **root folder of your Claude Code project**.
+Clone this repo into the **root of your Claude Code project** like this:
 
 ```
 
 your-claude-code-project/
+├── claude-code-mcp-guide/
+│   ├── README.md
+│   ├── add\_remote\_mcp.sh
+│   └── mcp/
+│       ├── mcp-http-bridge.py           # Shared bridge script (copied during setup)
+│       └── example\_mcp/
+│           └── .env.example             # Example template for your own MCPs
+
+```
+
+After running the setup script, the following will be created:
+
+```
+
 ├── .claude/
 │   └── mcp/
 │       ├── airtable/
-│       │   ├── .env
-│       └── mcp-http-bridge.py
-├── add\_remote\_mcp.sh            # 🆕 Script to easily add new cloud MCPs
-├── mcp/
-│   └── mcp-http-bridge.py       # Original copy (used once, then copied to .claude)
-├── README.md
-└── your-project-files/
+│       │   └── .env                     # Your service-specific secrets
+│       └── mcp-http-bridge.py          # Copied bridge used for Claude integration
 
 ````
-
-> 🧠 The `add_remote_mcp.sh` script will create `.claude/mcp/` for you — so **always run the clone and the script from the project root**, not from elsewhere.
 
 ---
 
 ## 🛠️ Initial Setup
 
-1. From your Claude Code project root:
+1. From the **root of your Claude Code project**, clone this guide:
 
 ```bash
 git clone https://github.com/majkonautic/claude-code-mcp-guide
-cd claude-code-mcp-guide
 ````
 
-2. Run the interactive setup wizard to add your first remote MCP:
+2. Run the interactive setup wizard:
 
 ```bash
+cd claude-code-mcp-guide
 ./add_remote_mcp.sh
 ```
 
 This will:
 
-* Create `.claude/mcp/`
-* Ask for MCP name, URL, API key, and any other secrets
-* Copy `mcp-http-bridge.py` into `.claude/mcp/`
-* Build a `.env` file inside `.claude/mcp/[your-mcp-name]/`
+* Prompt you for:
+
+  * MCP name (e.g., `airtable`)
+  * MCP URL (e.g., `https://airtable.mcp.example.com`)
+  * MCP API key (optional)
+  * Any number of service-specific secrets (e.g. `AIRTABLE_BASE_ID`, `SUPABASE_DB_URL`)
+* Create a folder at `.claude/mcp/<your-name>/`
+* Write all values into `.env`
+* Copy the bridge script (`mcp-http-bridge.py`) to `.claude/mcp/`
 
 ---
 
-## 🧪 Registering the MCP
+## ✅ Registering MCPs (Always from Project Root)
 
-Once created, you **must register the MCP from your core project root**, like this:
+After setup, **register the MCP from your project root** like this:
 
 ```bash
-cd your-claude-code-project
-claude mcp add [name] python3 .claude/mcp/mcp-http-bridge.py
+claude mcp add <name> python3 .claude/mcp/mcp-http-bridge.py
 ```
 
-✅ Do **not** run this command from `.claude/mcp/[name]/` — Claude stores paths relative to project root.
+Example:
+
+```bash
+claude mcp add airtable python3 .claude/mcp/mcp-http-bridge.py
+```
+
+> 🛑 **Important:** Never run `claude mcp add` from inside `.claude/mcp/<name>/`.
+> Claude stores paths relative to your current working directory — using the wrong location will break registration.
 
 ---
 
-## MCP Onboarding Script: `add_remote_mcp.sh`
+## 🔁 Adding More MCPs
 
-To add more MCPs in the future:
+To create and configure more MCPs, repeat:
 
 ```bash
+cd claude-code-mcp-guide
 ./add_remote_mcp.sh
 ```
 
-It will:
+Each one gets:
 
-* Prompt you for MCP name + URL
-* Ask for an optional API key
-* Let you enter any number of service-specific secrets
-* Create `.env` file inside `.claude/mcp/[name]/`
-* Offer the Claude command for registering the MCP
+* Its own folder under `.claude/mcp/`
+* Its own `.env` file
+* Shared use of `mcp-http-bridge.py`
 
 ---
 
-## Example
-
-### Create Airtable MCP
+## 📄 Example: Airtable MCP
 
 ```bash
+cd claude-code-mcp-guide
 ./add_remote_mcp.sh
-# name: airtable
-# url: https://airtable.mcp.example.com
-# key: sk_test_airtable_123
-# extra: AIRTABLE_BASE_ID=appXXXX
-# extra: AIRTABLE_API_KEY=patYYYY
+
+# MCP Name: airtable
+# MCP URL: https://airtable.mcp.example.com
+# MCP API Key: sk_test_airtable_123
+# Additional secret: AIRTABLE_BASE_ID=appXXXX
+# Additional secret: AIRTABLE_API_KEY=patYYYY
 ```
 
-Then from **project root**:
+Then, from project root:
 
 ```bash
 claude mcp add airtable python3 .claude/mcp/mcp-http-bridge.py
@@ -105,62 +122,42 @@ claude mcp add airtable python3 .claude/mcp/mcp-http-bridge.py
 
 ---
 
-## ✅ Why Folder-Based MCPs Work
+## 🧪 Example Template
 
-Each MCP is:
+You can use the included template at:
 
-* Isolated in its own folder (`.claude/mcp/[name]`)
-* Powered by the shared `mcp-http-bridge.py`
-* Fully driven by the `.env` in that folder
+```
+claude-code-mcp-guide/mcp/example_mcp/.env.example
+```
 
-Supports:
-
-* Airtable, Supabase, AWS, Notion, etc.
-* Any number of services
-* Clean separation of secrets
+To bootstrap your own config folders by copying and editing.
 
 ---
 
-## MCP Types
+## 🔒 Security
 
-### 1. HTTP Bridge MCPs (Cloud)
+* Secrets are stored only in `.claude/mcp/<name>/.env`
+* `.env` files are **not committed**
+* Each service is isolated
+* `mcp-http-bridge.py` injects `X-API-Key` and other headers automatically
 
-Use `.claude/mcp/[name]/.env` + `mcp-http-bridge.py`.
+---
 
-### 2. Local MCPs (Docker)
-
-Place inside `mcp/[name]/` and register as:
+## 📦 Managing MCPs
 
 ```bash
-claude mcp add my-local-mcp python3 mcp/my-local-mcp/mcp-server.py
+claude mcp list                # List all registered MCPs
+claude mcp remove <name>       # Remove an MCP
+claude mcp logs <name>         # View logs for a running MCP
 ```
 
 ---
 
-## Managing MCPs
+## 🤝 Contributing
 
-```bash
-claude mcp list
-claude mcp remove [name]
-claude mcp logs [name]
-```
+PRs welcome for:
 
----
-
-## Security Notes
-
-* Do not commit `.env` files to Git
-* Each `.claude/mcp/[name]/.env` is local-only
-* API keys are injected automatically by `mcp-http-bridge.py`
-
----
-
-## Contributing
-
-PRs welcome with:
-
-* `.env.example` templates
-* New service integrations
-* Shell script improvements
-
+* New `.env.example` templates
+* Service-specific integrations (e.g., Notion, AWS)
+* Improvements to `add_remote_mcp.sh`
 
