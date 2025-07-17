@@ -10,7 +10,7 @@ Organize all your MCPs in a single `mcp` folder within your Claude Code project:
 your-claude-code-project/
 ├── mcp/
 │   ├── .env                    # Global env vars for cloud MCPs
-│   ├── mcp-http-bridge.py      # HTTP bridge for cloud MCPs
+│   ├── mcp-http-bridge.py      # HTTP bridge for cloud MCPs (with API key support)
 │   ├── supabase-cli-mcp/       # Local MCP example
 │   │   ├── .env               # Local env vars for this MCP
 │   │   ├── mcp-server.py
@@ -33,7 +33,7 @@ mkdir mcp
 cd mcp
 ```
 
-2. Download the HTTP bridge:
+2. Download the HTTP bridge (now with API key authentication):
 ```bash
 curl -O https://raw.githubusercontent.com/majkonautic/claude-code-mcp-guide/main/mcp-http-bridge.py
 chmod +x mcp-http-bridge.py
@@ -42,16 +42,20 @@ chmod +x mcp-http-bridge.py
 3. Create global `.env` for cloud MCPs:
 ```bash
 # mcp/.env
-# AWS MCP
+# Service credentials
 AWS_ACCESS_KEY_ID=your_access_key_here
 AWS_SECRET_ACCESS_KEY=your_secret_key_here
 AWS_DEFAULT_REGION=us-east-1
 
-# Airtable MCP
+# Airtable credentials
 AIRTABLE_API_KEY=your_api_key_here
 AIRTABLE_BASE_ID=your_base_id_here
 
-# Add other cloud service credentials as needed
+# MCP API Keys for authentication (REQUIRED for security)
+MCP_API_KEY_SUPABASE=your_supabase_mcp_auth_key
+MCP_API_KEY_AIRTABLE=your_airtable_mcp_auth_key
+MCP_API_KEY_AWS=your_aws_mcp_auth_key
+MCP_API_KEY_NOTION=your_notion_mcp_auth_key
 ```
 
 ## Quick Start
@@ -170,9 +174,17 @@ claude mcp logs [name]
 - Example:
   ```bash
   # mcp/.env
+  # Service credentials
   AWS_ACCESS_KEY_ID=your_key
+  AWS_SECRET_ACCESS_KEY=your_secret
   AIRTABLE_API_KEY=your_key
   NOTION_API_KEY=your_key
+  
+  # MCP API Keys for authentication
+  MCP_API_KEY_SUPABASE=your_supabase_mcp_auth_key
+  MCP_API_KEY_AIRTABLE=your_airtable_mcp_auth_key
+  MCP_API_KEY_AWS=your_aws_mcp_auth_key
+  MCP_API_KEY_NOTION=your_notion_mcp_auth_key
   ```
 
 ### Local MCPs
@@ -196,6 +208,134 @@ MCPs must implement the MCP protocol (version 2024-11-05 or later). Place your c
 * **Tool not found**: Verify MCP is registered with `claude mcp list`
 * **Path issues**: Ensure you're running commands from the project root
 * **Env vars not loaded**: Check `.env` file location and format
+* **403 Forbidden**: Check your MCP API key configuration
+* **Authentication failed**: Verify X-API-Key header is set correctly
+
+## Security
+
+All cloud MCP servers are protected with API key authentication:
+- Each MCP server requires an `X-API-Key` header
+- Keys are stored in your local `.env` file
+- Never commit API keys to version control
+- Use different keys for each MCP service
+- The `mcp-http-bridge.py` automatically handles authentication
+
+---
+
+# ⚙️ Claude Code Terminal Prompting Framework
+
+*Best practices for working with Claude Code and MCP discovery*
+
+## 📐 Prompt Template (Claude MCP-Aware)
+
+When working with Claude Code, structure your prompts as follows:
+
+```markdown
+### 🧭 Objective
+What do you want Claude to do? Be clear and goal-oriented.
+
+### 📂 Context
+- Tech stack and architecture
+- Files and folders involved
+- Feature or ticket reference
+- Relevant data models
+
+### 🛠️ Requirements
+- Functional behavior needed
+- Security/performance constraints
+- Integration requirements
+- Business rules
+
+### 🧠 MCP Discovery & Usage
+Tell Claude to:
+- List available MCPs: `claude mcp list`
+- Identify relevant tools for the task
+- Use appropriate MCP resources
+- Explain which MCPs were selected and why
+
+### ✅ Acceptance Criteria
+- [ ] Define successful output
+- [ ] Include edge cases
+- [ ] Specify error handling
+- [ ] Ensure testability
+
+### 🧪 Testing Instructions
+- Test cases to cover
+- Sample input/output
+- Edge case expectations
+- Testing framework preferences
+
+### 🗃️ Tools / MCP / Clients Involved
+List expected MCPs and tools
+
+### 🧱 Documentation Requirements
+- Docstring updates
+- README modifications
+- API documentation updates
+
+### 🚫 Exclusions / Warnings
+- What NOT to modify
+- Security boundaries
+- Performance considerations
+```
+
+## 💡 Prompting Best Practices
+
+| Phase        | Action                                                              |
+| ------------ | ------------------------------------------------------------------- |
+| **Plan**     | Ask Claude to identify available MCPs and propose approach          |
+| **Act**      | Claude writes code using selected MCPs                              |
+| **Validate** | Claude explains testing, dependencies, and integration              |
+
+## Example MCP-Aware Prompt
+
+```markdown
+### 🧭 Objective
+Create an endpoint to upload files to S3 and track in database
+
+### 📂 Context
+FastAPI backend with Supabase database and AWS S3 storage
+
+### 🛠️ Requirements
+- Accept file uploads via POST
+- Validate file type and size
+- Upload to S3 with unique key
+- Store metadata in Supabase
+
+### 🧠 MCP Discovery & Usage
+Claude should:
+- Run `claude mcp list`
+- Use AWS MCP for S3 operations
+- Use Supabase MCP for database
+- Explain tool selection
+
+### ✅ Acceptance Criteria
+- [ ] Files uploaded to S3 successfully
+- [ ] Metadata stored in database
+- [ ] Proper error handling
+- [ ] Returns S3 URL to client
+
+### 🧪 Testing Instructions
+- Test with various file types
+- Test size limits
+- Verify S3 upload
+- Check database entry
+```
+
+## MCP Discovery Commands
+
+Start your Claude Code session with:
+
+```bash
+# List all available MCPs
+claude mcp list
+
+# Check specific MCP status
+claude mcp logs [mcp-name]
+
+# For local development
+claude --dev
+```
 
 ## Contributing
 
