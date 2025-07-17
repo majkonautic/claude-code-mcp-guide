@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
+"""
+MCP HTTP Bridge - Secure Version with API Key Support
+"""
 import sys
 import json
 import urllib.request
 import ssl
+import os
 
 def main():
     if len(sys.argv) < 2:
@@ -11,6 +15,19 @@ def main():
     
     server_url = sys.argv[1]
     ssl_context = ssl.create_default_context()
+    
+    # Determine which API key to use based on server URL
+    api_key = None
+    if 'supabase' in server_url:
+        api_key = os.environ.get('MCP_API_KEY_SUPABASE')
+    elif 'airtable' in server_url:
+        api_key = os.environ.get('MCP_API_KEY_AIRTABLE')
+    elif 'aws' in server_url:
+        api_key = os.environ.get('MCP_API_KEY_AWS')
+    elif 'notion' in server_url:
+        api_key = os.environ.get('MCP_API_KEY_NOTION')
+    else:
+        api_key = os.environ.get('MCP_API_KEY')
     
     while True:
         try:
@@ -39,8 +56,8 @@ def main():
                             "prompts": {}
                         },
                         "serverInfo": {
-                            "name": "HTTP-MCP Bridge",
-                            "version": "1.0.0"
+                            "name": "HTTP-MCP Bridge (Secure)",
+                            "version": "1.1.0"
                         }
                     }
                 }
@@ -52,7 +69,7 @@ def main():
             if "notification" in method:
                 continue
             
-            # Handle prompts/list - respond immediately with empty list
+            # Handle prompts/list
             if method == "prompts/list":
                 response = {
                     "jsonrpc": "2.0",
@@ -63,7 +80,7 @@ def main():
                 sys.stdout.flush()
                 continue
             
-            # Handle resources/list - respond immediately with empty list
+            # Handle resources/list
             if method == "resources/list":
                 response = {
                     "jsonrpc": "2.0",
@@ -74,9 +91,8 @@ def main():
                 sys.stdout.flush()
                 continue
             
-            # Handle tools/list - provide generic passthrough tools
+            # Handle tools/list
             if method == "tools/list":
-                # Generic tools that work with any HTTP MCP server
                 tools = [
                     {
                         "name": "call",
@@ -92,7 +108,7 @@ def main():
                     }
                 ]
                 
-                # Add common tool shortcuts based on server URL
+                # Add service-specific tools
                 if "airtable" in server_url:
                     tools.extend([
                         {
@@ -119,20 +135,6 @@ def main():
                             }
                         }
                     ])
-                elif "notion" in server_url:
-                    tools.extend([
-                        {
-                            "name": "search",
-                            "description": "Search Notion workspace",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "query": {"type": "string"}
-                                },
-                                "required": ["query"]
-                            }
-                        }
-                    ])
                 elif "supabase" in server_url:
                     tools.extend([
                         {
@@ -141,14 +143,52 @@ def main():
                             "inputSchema": {"type": "object"}
                         },
                         {
-                            "name": "execute_sql",
-                            "description": "Execute SQL query",
+                            "name": "query_table",
+                            "description": "Query records from a table",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "query": {"type": "string"}
+                                    "table": {"type": "string"},
+                                    "limit": {"type": "number"}
                                 },
-                                "required": ["query"]
+                                "required": ["table"]
+                            }
+                        },
+                        {
+                            "name": "insert_record",
+                            "description": "Insert a record into a table",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "table": {"type": "string"},
+                                    "record": {"type": "object"}
+                                },
+                                "required": ["table", "record"]
+                            }
+                        },
+                        {
+                            "name": "update_record",
+                            "description": "Update records in a table",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "table": {"type": "string"},
+                                    "updates": {"type": "object"},
+                                    "match": {"type": "object"}
+                                },
+                                "required": ["table", "updates", "match"]
+                            }
+                        },
+                        {
+                            "name": "delete_record",
+                            "description": "Delete records from a table",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "table": {"type": "string"},
+                                    "match": {"type": "object"}
+                                },
+                                "required": ["table", "match"]
                             }
                         }
                     ])
@@ -182,10 +222,16 @@ def main():
                 
                 try:
                     data = json.dumps(http_request).encode('utf-8')
+                    
+                    # Prepare headers with API key if available
+                    headers = {'Content-Type': 'application/json'}
+                    if api_key:
+                        headers['X-API-Key'] = api_key
+                    
                     req = urllib.request.Request(
                         server_url,
                         data=data,
-                        headers={'Content-Type': 'application/json'},
+                        headers=headers,
                         method='POST'
                     )
                     
@@ -196,6 +242,15 @@ def main():
                         "jsonrpc": "2.0",
                         "id": request.get("id"),
                         "result": result.get("result", result)
+                    }
+                except urllib.error.HTTPError as e:
+                    error_msg = f"HTTP {e.code}: {e.reason}"
+                    if e.code == 403:
+                        error_msg = "Authentication failed. Check your API key configuration."
+                    response = {
+                        "jsonrpc": "2.0",
+                        "id": request.get("id"),
+                        "error": {"code": -32603, "message": error_msg}
                     }
                 except Exception as e:
                     response = {
