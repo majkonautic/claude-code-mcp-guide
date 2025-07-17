@@ -153,6 +153,61 @@ claude mcp logs <name>         # View logs for a running MCP
 
 ---
 
+Absolutely. Here's the final **updated `README.md` section** to include both the **bridge capabilities** and the **recommendation flow**, formatted cleanly and ready to paste directly into your markdown:
+
+---
+
+## 🔄 Bridge vs Direct MCP Registration
+
+You can add a Claude MCP in two ways:
+
+### ✅ 1. Using **Direct URL** (no script)
+
+Use this when your MCP is **public and doesn't require authentication**:
+
+```bash
+claude mcp add my-public-mcp https://your-mcp.example.com
+```
+
+> ❗ Not suitable for private or secret-driven services
+
+---
+
+### ✅ 2. Using **Bridge Script** (`python3 mcp-http-bridge.py ...`)
+
+Use this when your MCP:
+
+* Requires `X-API-Key` headers
+* Needs injected secrets (e.g. Airtable API keys)
+* Is hosted securely
+* Should load dynamic env files per instance
+
+---
+
+### ⚙️ What the Bridge Enables
+
+| Feature                               | Native URL | Bridge Required |
+| ------------------------------------- | ---------- | --------------- |
+| Add MCP with **no auth**              | ✅          | ❌               |
+| Add MCP with **X-API-Key**            | ❌          | ✅               |
+| Inject **.env secrets**               | ❌          | ✅               |
+| Mask / override **headers**           | ❌          | ✅               |
+| Use MCP from **hidden/secure folder** | ❌          | ✅               |
+
+---
+
+### ✅ Recommendation Flow
+
+| Use Case                    | What to do                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| ✅ Public MCP (no auth)      | `claude mcp add my-mcp https://my-public-mcp.com`                                                      |
+| 🔐 Private MCP with API key | `claude mcp add my-mcp python3 .claude/mcp/mcp-http-bridge.py https://mcp.url.com .claude/mcp/my-mcp/` |
+
+> 💡 Use the bridge any time your MCP setup includes secrets, access control, or folder-specific configuration.
+
+---
+
+
 ## 🤝 Contributing
 
 PRs welcome for:
