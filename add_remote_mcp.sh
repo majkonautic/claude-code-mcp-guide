@@ -3,6 +3,7 @@
 echo "🚀 Claude Remote MCP Setup Wizard"
 
 cd "$(dirname "$0")"
+SCRIPT_DIR="$(pwd)"
 PROJECT_ROOT="$(pwd)/.."
 TARGET_DIR="$PROJECT_ROOT/.claude/mcp"
 
@@ -53,7 +54,7 @@ fi
 # Step 3: Prompt for MCP
 read -p "📛 MCP name (e.g. airtable): " MCP_NAME
 read -p "🌐 MCP URL: " MCP_URL
-read -p "🔑 MCP API Key (optional): " MCP_API_KEY
+read -p "🔑 MCP API Key: " MCP_API_KEY
 
 EXTRA_SECRETS=()
 while true; do
@@ -78,26 +79,44 @@ echo "-----------------------------"
 cat "$ENV_FILE"
 echo "-----------------------------"
 
-# Step 6: Claude command - using venv Python directly
-VENV_PYTHON="$(cd "$PROJECT_ROOT" && pwd)/.venv/bin/python"
-BRIDGE_PATH="$(cd "$TARGET_DIR" && pwd)/mcp-http-bridge.py"
-ENV_PATH="$(cd "$MCP_FOLDER" && pwd)"
-
+# Step 6: Claude command - IMPORTANT: Using full paths with venv Python
 read -p "🤖 Do you want to register this MCP in Claude now? (y/n): " CONFIRM
 if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
   echo ""
   echo "💡 Running Claude registration..."
   
-  # Use the virtual environment's Python directly
-  claude mcp add "$MCP_NAME" "$VENV_PYTHON" "$BRIDGE_PATH" "$MCP_URL" "$ENV_PATH"
+  # IMPORTANT: Use absolute paths for everything
+  cd "$PROJECT_ROOT"
+  claude mcp add "$MCP_NAME" "$(pwd)/.venv/bin/python" "$(pwd)/.claude/mcp/mcp-http-bridge.py" "$MCP_URL" "$(pwd)/.claude/mcp/$MCP_NAME/"
   
   echo ""
   echo "✅ MCP '$MCP_NAME' registered with Claude using virtual environment!"
 else
   echo ""
-  echo "👉 To register manually later, run:"
-  echo "claude mcp add $MCP_NAME $VENV_PYTHON $BRIDGE_PATH $MCP_URL $ENV_PATH"
+  echo "👉 To register manually later, run from project root:"
+  echo "cd $PROJECT_ROOT"
+  echo "claude mcp add $MCP_NAME \"\$(pwd)/.venv/bin/python\" \"\$(pwd)/.claude/mcp/mcp-http-bridge.py\" \"$MCP_URL\" \"\$(pwd)/.claude/mcp/$MCP_NAME/\""
 fi
 
 echo ""
 echo "🎉 Done! MCP '$MCP_NAME' is ready to use in Claude."
+
+# Step 7: Move to project root
+echo ""
+echo "📍 Moving to project root directory..."
+cd "$PROJECT_ROOT"
+
+# Step 8: Ask about removing the setup folder
+echo ""
+read -p "🗑️  Do you want to remove the claude-code-mcp-guide setup folder? (y/n): " REMOVE_CONFIRM
+if [[ "$REMOVE_CONFIRM" =~ ^[Yy]$ ]]; then
+  echo "🧹 Removing claude-code-mcp-guide folder..."
+  rm -rf "$SCRIPT_DIR"
+  echo "✅ Setup folder removed. You're now in: $(pwd)"
+else
+  echo "📁 Keeping claude-code-mcp-guide folder for future reference."
+  echo "📍 You're now in: $(pwd)"
+fi
+
+echo ""
+echo "👋 All done! Your MCP is configured and ready to use."
