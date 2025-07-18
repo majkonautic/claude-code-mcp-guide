@@ -1,6 +1,7 @@
 #!/bin/bash
 
 echo "🚀 Claude Remote MCP Setup Wizard"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 cd "$(dirname "$0")"
 SCRIPT_DIR="$(pwd)"
@@ -12,6 +13,10 @@ echo ""
 if [ ! -d "$PROJECT_ROOT/.venv" ]; then
   echo "📦 Creating Python virtual environment..."
   python3 -m venv "$PROJECT_ROOT/.venv"
+  if [ $? -ne 0 ]; then
+    echo "❌ Failed to create virtual environment. Make sure Python 3 is installed."
+    exit 1
+  fi
 else
   echo "✅ Using existing virtualenv at .venv/"
 fi
@@ -45,6 +50,10 @@ echo "✅ Ensured MCP folder at: $TARGET_DIR"
 
 # Step 2: Copy the bridge script
 if [ ! -f "$TARGET_DIR/mcp-http-bridge.py" ]; then
+  if [ ! -f "mcp/mcp-http-bridge.py" ]; then
+    echo "❌ Error: mcp/mcp-http-bridge.py not found in setup directory"
+    exit 1
+  fi
   cp mcp/mcp-http-bridge.py "$TARGET_DIR/"
   echo "📦 Copied mcp-http-bridge.py to .claude/mcp/"
 else
@@ -52,15 +61,37 @@ else
 fi
 
 # Step 3: Prompt for MCP
-read -p "📛 MCP name (e.g. airtable): " MCP_NAME
-read -p "🌐 MCP URL: " MCP_URL
+echo ""
+echo "📝 MCP Configuration"
+echo "────────────────────"
+read -p "📛 MCP name (e.g. airtable, aws, supabase): " MCP_NAME
+
+# Validate MCP name
+if [[ -z "$MCP_NAME" ]]; then
+  echo "❌ MCP name cannot be empty"
+  exit 1
+fi
+
+read -p "🌐 MCP URL (e.g. https://your-mcp-server.com/): " MCP_URL
 read -p "🔑 MCP API Key: " MCP_API_KEY
 
-EXTRA_SECRETS=()
+# Collect service-specific environment variables
+echo ""
+echo "📝 Add service-specific environment variables"
+echo "   Examples:"
+echo "   - For Airtable: AIRTABLE_BASE_ID=appXXXX"
+echo "   - For AWS: AWS_ACCESS_KEY_ID=AKIAXXXX, AWS_SECRET_ACCESS_KEY=xxxx, AWS_DEFAULT_REGION=us-east-1"
+echo "   - For Supabase: SUPABASE_URL=https://xxx.supabase.co, SUPABASE_SERVICE_ROLE_KEY=xxx"
+echo ""
+
+EXTRA_VARS=()
 while true; do
-  read -p "➕ Add a service-specific secret (key=value) or press Enter to continue: " PAIR
-  [[ -z "$PAIR" ]] && break
-  EXTRA_SECRETS+=("$PAIR")
+  read -p "   Variable name (or press Enter to finish): " VAR_NAME
+  [[ -z "$VAR_NAME" ]] && break
+  read -p "   Value for $VAR_NAME: " VAR_VALUE
+  if [[ -n "$VAR_VALUE" ]]; then
+    EXTRA_VARS+=("$VAR_NAME=$VAR_VALUE")
+  fi
 done
 
 # Step 4: Write .env
@@ -70,63 +101,150 @@ ENV_FILE="$MCP_FOLDER/.env"
 
 echo "MCP_URL=$MCP_URL" > "$ENV_FILE"
 [ -n "$MCP_API_KEY" ] && echo "MCP_API_KEY=$MCP_API_KEY" >> "$ENV_FILE"
-for secret in "${EXTRA_SECRETS[@]}"; do echo "$secret" >> "$ENV_FILE"; done
+
+# Add service-specific variables
+for var in "${EXTRA_VARS[@]}"; do 
+  echo "$var" >> "$ENV_FILE"
+done
 
 # Step 5: Summary
 echo ""
 echo "✅ Created .env at: $ENV_FILE"
-echo "-----------------------------"
+echo "────────────────────────────────────────────────────────"
 cat "$ENV_FILE"
-echo "-----------------------------"
+echo "────────────────────────────────────────────────────────"
 
-# Step 6: Claude command - CRITICAL: Use virtual environment Python
-read -p "🤖 Do you want to register this MCP in Claude now? (y/n): " CONFIRM
+# Step 6: Update .gitignore
+if [ -f "$PROJECT_ROOT/.gitignore" ]; then
+  # Check if .env is already ignored
+  if ! grep -q "^\.env$" "$PROJECT_ROOT/.gitignore" && ! grep -q "^\*\.env$" "$PROJECT_ROOT/.gitignore"; then
+    echo "" >> "$PROJECT_ROOT/.gitignore"
+    echo "# MCP secrets" >> "$PROJECT_ROOT/.gitignore"
+    echo ".env" >> "$PROJECT_ROOT/.gitignore"
+    echo "*.env" >> "$PROJECT_ROOT/.gitignore"
+    echo ".claude/mcp/*/.env" >> "$PROJECT_ROOT/.gitignore"
+    echo "✅ Added .env files to .gitignore"
+  fi
+else
+  cat > "$PROJECT_ROOT/.gitignore" << 'EOF'
+# MCP secrets
+.env
+*.env
+.claude/mcp/*/.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+EOF
+  echo "✅ Created .gitignore with .env exclusions"
+fi
+
+# Step 7: Claude registration
+echo ""
+echo "🤖 Claude Code MCP Registration"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "To use this MCP in Claude Code, you need to register it."
+echo ""
+
+read -p "Do you want to register this MCP in Claude Code now? (y/n): " CONFIRM
 if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
   echo ""
   echo "💡 Running Claude registration..."
   
-  # Change to project root and use virtual environment Python with absolute paths
   cd "$PROJECT_ROOT"
   
-  # This is the correct command format that MUST be used
-  claude mcp add "$MCP_NAME" "$(pwd)/.venv/bin/python" "$(pwd)/.claude/mcp/mcp-http-bridge.py" "$MCP_URL" "$(pwd)/.claude/mcp/$MCP_NAME/"
+  # Register with Claude Code
+  # The bridge will load the .env from the specified folder
+  claude mcp add "$MCP_NAME" \
+    "$(pwd)/.venv/bin/python" \
+    "$(pwd)/.claude/mcp/mcp-http-bridge.py" \
+    "$(pwd)/.claude/mcp/$MCP_NAME/"
   
-  echo ""
-  echo "✅ MCP '$MCP_NAME' registered with Claude using virtual environment!"
-  echo ""
-  echo "🔍 Registered with command:"
-  echo "   claude mcp add $MCP_NAME \"$(pwd)/.venv/bin/python\" \"$(pwd)/.claude/mcp/mcp-http-bridge.py\" \"$MCP_URL\" \"$(pwd)/.claude/mcp/$MCP_NAME/\""
+  if [ $? -eq 0 ]; then
+    echo ""
+    echo "✅ MCP '$MCP_NAME' registered successfully with Claude Code!"
+    echo ""
+    echo "🔍 Registration details:"
+    echo "   Name: $MCP_NAME"
+    echo "   Python: $(pwd)/.venv/bin/python"
+    echo "   Bridge: $(pwd)/.claude/mcp/mcp-http-bridge.py"
+    echo "   Config: $(pwd)/.claude/mcp/$MCP_NAME/.env"
+    echo ""
+    echo "📝 To verify: claude mcp list"
+    echo "🧪 To test: claude mcp test $MCP_NAME"
+  else
+    echo ""
+    echo "⚠️  Registration may have failed. Try manual registration below."
+  fi
 else
   echo ""
-  echo "👉 To register manually later, run from project root:"
+  echo "📝 Manual Registration Instructions"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "To register this MCP manually, run the following command from your project root:"
   echo ""
   echo "cd $PROJECT_ROOT"
-  echo "claude mcp add $MCP_NAME \"\$(pwd)/.venv/bin/python\" \"\$(pwd)/.claude/mcp/mcp-http-bridge.py\" \"$MCP_URL\" \"\$(pwd)/.claude/mcp/$MCP_NAME/\""
+  echo ""
+  echo "claude mcp add $MCP_NAME \\"
+  echo "  \"$(pwd)/.venv/bin/python\" \\"
+  echo "  \"$(pwd)/.claude/mcp/mcp-http-bridge.py\" \\"
+  echo "  \"$(pwd)/.claude/mcp/$MCP_NAME/\""
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "After registration:"
+  echo "- Verify with: claude mcp list"
+  echo "- Test with: claude mcp test $MCP_NAME"
+  echo "- Remove with: claude mcp remove $MCP_NAME"
 fi
 
+# Step 8: Usage instructions
 echo ""
-echo "🎉 Done! MCP '$MCP_NAME' is ready to use in Claude."
+echo "🎉 Setup Complete!"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "📚 How it works:"
+echo "   1. Your MCP secrets are stored in: .claude/mcp/$MCP_NAME/.env"
+echo "   2. The bridge script loads these secrets using python-dotenv"
+echo "   3. Claude Code uses your virtual environment Python"
+echo "   4. All communication goes through your secure MCP server"
+echo ""
+echo "🔧 Troubleshooting:"
+echo "   - Connection issues: Check your MCP_URL and MCP_API_KEY"
+echo "   - Module errors: Make sure you're using the venv Python"
+echo "   - List all MCPs: claude mcp list"
+echo "   - View logs: claude mcp logs $MCP_NAME"
+echo ""
+echo "🔐 Security notes:"
+echo "   - Never commit .env files (they're gitignored)"
+echo "   - Keep your API keys secure"
+echo "   - Each MCP has isolated credentials"
 
-# Step 7: Move to project root
+# Step 9: Move to project root
 echo ""
 echo "📍 Moving to project root directory..."
 cd "$PROJECT_ROOT"
+echo "📍 You're now in: $(pwd)"
 
-# Step 8: Ask about removing the setup folder
+# Step 10: Ask about removing the setup folder
 echo ""
 read -p "🗑️  Do you want to remove the claude-code-mcp-guide setup folder? (y/n): " REMOVE_CONFIRM
 if [[ "$REMOVE_CONFIRM" =~ ^[Yy]$ ]]; then
   echo "🧹 Removing claude-code-mcp-guide folder..."
   rm -rf "$SCRIPT_DIR"
-  echo "✅ Setup folder removed. You're now in: $(pwd)"
+  echo "✅ Setup folder removed."
 else
   echo "📁 Keeping claude-code-mcp-guide folder for future reference."
-  echo "📍 You're now in: $(pwd)"
 fi
 
 echo ""
-echo "👋 All done! Your MCP is configured and ready to use."
+echo "👋 All done! Your MCP is ready to use in Claude Code."
 echo ""
-echo "⚠️  IMPORTANT: Always use the virtual environment Python!"
-echo "   Correct: \"\$(pwd)/.venv/bin/python\""
-echo "   Wrong: \"python3\" or \"python\""
+echo "💡 Next steps:"
+echo "   - Start Claude Code in this project"
+echo "   - Your MCP tools will be available automatically"
+echo "   - Type '/' in Claude to see available MCP commands"
+echo ""
