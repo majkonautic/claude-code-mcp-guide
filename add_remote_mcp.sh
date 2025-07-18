@@ -68,18 +68,37 @@ echo "-----------------------------"
 cat "$ENV_FILE"
 echo "-----------------------------"
 
-# Step 6: Claude command
+# Step 6: Create wrapper script that uses the virtualenv
+WRAPPER_SCRIPT="$TARGET_DIR/run-${MCP_NAME}.sh"
+cat > "$WRAPPER_SCRIPT" << EOF
+#!/bin/bash
+# Auto-generated wrapper for $MCP_NAME MCP
+source "$PROJECT_ROOT/.venv/bin/activate"
+exec python3 "$TARGET_DIR/mcp-http-bridge.py" "\$@"
+EOF
+chmod +x "$WRAPPER_SCRIPT"
+echo "✅ Created wrapper script: $WRAPPER_SCRIPT"
+
+# Step 7: Claude command - now using the wrapper
 read -p "🤖 Do you want to register this MCP in Claude now? (y/n): " CONFIRM
 if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
   echo ""
-  echo "💡 From your project root, run:"
+  echo "💡 Running Claude registration..."
+  # Use absolute paths for Claude
+  BRIDGE_PATH="$(cd "$TARGET_DIR" && pwd)/run-${MCP_NAME}.sh"
+  ENV_PATH="$(cd "$MCP_FOLDER" && pwd)"
+  
+  claude mcp add "$MCP_NAME" "$BRIDGE_PATH" "$MCP_URL" "$ENV_PATH"
+  
   echo ""
-  echo "claude mcp add $MCP_NAME python3 .claude/mcp/mcp-http-bridge.py $MCP_URL .claude/mcp/$MCP_NAME/"
+  echo "✅ MCP '$MCP_NAME' registered with Claude!"
 else
-  echo "👉 To register manually later, run from project root:"
-  echo "claude mcp add $MCP_NAME python3 .claude/mcp/mcp-http-bridge.py $MCP_URL .claude/mcp/$MCP_NAME/"
+  echo ""
+  echo "👉 To register manually later, run:"
+  BRIDGE_PATH="$(cd "$TARGET_DIR" && pwd)/run-${MCP_NAME}.sh"
+  ENV_PATH="$(cd "$MCP_FOLDER" && pwd)"
+  echo "claude mcp add $MCP_NAME $BRIDGE_PATH $MCP_URL $ENV_PATH"
 fi
 
 echo ""
-echo "🎉 Done! MCP '$MCP_NAME' is ready."
-
+echo "🎉 Done! MCP '$MCP_NAME' is ready to use in Claude."
