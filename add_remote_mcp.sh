@@ -79,21 +79,27 @@ echo "-----------------------------"
 cat "$ENV_FILE"
 echo "-----------------------------"
 
-# Step 6: Claude command - IMPORTANT: Using full paths with venv Python
+# Step 6: Claude command - CRITICAL FIX HERE!
 read -p "🤖 Do you want to register this MCP in Claude now? (y/n): " CONFIRM
 if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
   echo ""
   echo "💡 Running Claude registration..."
   
-  # IMPORTANT: Use absolute paths for everything
+  # CRITICAL: Change to project root and use virtual environment Python with absolute paths
   cd "$PROJECT_ROOT"
+  
+  # This is the correct command format that MUST be used
   claude mcp add "$MCP_NAME" "$(pwd)/.venv/bin/python" "$(pwd)/.claude/mcp/mcp-http-bridge.py" "$MCP_URL" "$(pwd)/.claude/mcp/$MCP_NAME/"
   
   echo ""
   echo "✅ MCP '$MCP_NAME' registered with Claude using virtual environment!"
+  echo ""
+  echo "🔍 Registered with command:"
+  echo "   claude mcp add $MCP_NAME \"$(pwd)/.venv/bin/python\" \"$(pwd)/.claude/mcp/mcp-http-bridge.py\" \"$MCP_URL\" \"$(pwd)/.claude/mcp/$MCP_NAME/\""
 else
   echo ""
   echo "👉 To register manually later, run from project root:"
+  echo ""
   echo "cd $PROJECT_ROOT"
   echo "claude mcp add $MCP_NAME \"\$(pwd)/.venv/bin/python\" \"\$(pwd)/.claude/mcp/mcp-http-bridge.py\" \"$MCP_URL\" \"\$(pwd)/.claude/mcp/$MCP_NAME/\""
 fi
@@ -120,3 +126,7 @@ fi
 
 echo ""
 echo "👋 All done! Your MCP is configured and ready to use."
+echo ""
+echo "⚠️  IMPORTANT: Always use the virtual environment Python!"
+echo "   Correct: \"\$(pwd)/.venv/bin/python\""
+echo "   Wrong: \"python3\" or \"python\""
