@@ -149,6 +149,17 @@ echo ""
 echo "To use this MCP in Claude Code, you need to register it."
 echo ""
 
+# Check for known compatibility issues
+COMPATIBILITY_NOTE=""
+if [[ "$MCP_URL" == *"aws"* ]]; then
+  COMPATIBILITY_NOTE="⚠️  Note: AWS MCP servers may use a non-standard API format."
+fi
+
+if [[ -n "$COMPATIBILITY_NOTE" ]]; then
+  echo "$COMPATIBILITY_NOTE"
+  echo ""
+fi
+
 read -p "Do you want to register this MCP in Claude Code now? (y/n): " CONFIRM
 if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
   echo ""
@@ -231,13 +242,13 @@ echo "📍 You're now in: $(pwd)"
 
 # Step 10: Ask about removing the setup folder
 echo ""
-read -p "🗑️  Do you want to remove the claude-code-mcp-guide setup folder? (y/n): " REMOVE_CONFIRM
+read -p "🗑️  Do you want to remove the claude-remote-mcp setup folder? (y/n): " REMOVE_CONFIRM
 if [[ "$REMOVE_CONFIRM" =~ ^[Yy]$ ]]; then
-  echo "🧹 Removing claude-code-mcp-guide folder..."
+  echo "🧹 Removing claude-remote-mcp folder..."
   rm -rf "$SCRIPT_DIR"
   echo "✅ Setup folder removed."
 else
-  echo "📁 Keeping claude-code-mcp-guide folder for future reference."
+  echo "📁 Keeping claude-remote-mcp folder for future reference."
 fi
 
 echo ""
