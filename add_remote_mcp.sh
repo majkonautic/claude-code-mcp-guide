@@ -10,18 +10,28 @@ echo ""
 # Step 0: Set up virtualenv
 if [ ! -d "$PROJECT_ROOT/.venv" ]; then
   echo "📦 Creating Python virtual environment..."
-  python3 -m venv "$PROJECT_ROOT/.venv" --upgrade-deps
+  python3 -m venv "$PROJECT_ROOT/.venv"
 else
   echo "✅ Using existing virtualenv at .venv/"
 fi
 
 # Step 0.1: Activate venv
+echo "🔄 Activating virtual environment..."
 source "$PROJECT_ROOT/.venv/bin/activate"
 
-# Step 0.2: Ensure python-dotenv is installed
-if ! python3 -c "import dotenv" &> /dev/null; then
-  echo "📦 Installing required package: python-dotenv"
+# Step 0.2: Ensure python-dotenv is installed IN THE VENV
+echo "📦 Checking python-dotenv..."
+if ! python -c "import dotenv" &> /dev/null; then
+  echo "📦 Installing python-dotenv in virtual environment..."
   pip install python-dotenv
+  
+  # Verify installation
+  if python -c "import dotenv; print('✅ python-dotenv installed successfully')"; then
+    echo ""
+  else
+    echo "❌ Failed to install python-dotenv"
+    exit 1
+  fi
 else
   echo "✅ python-dotenv already installed"
 fi
@@ -68,36 +78,25 @@ echo "-----------------------------"
 cat "$ENV_FILE"
 echo "-----------------------------"
 
-# Step 6: Create wrapper script that uses the virtualenv
-WRAPPER_SCRIPT="$TARGET_DIR/run-${MCP_NAME}.sh"
-cat > "$WRAPPER_SCRIPT" << EOF
-#!/bin/bash
-# Auto-generated wrapper for $MCP_NAME MCP
-source "$PROJECT_ROOT/.venv/bin/activate"
-exec python3 "$TARGET_DIR/mcp-http-bridge.py" "\$@"
-EOF
-chmod +x "$WRAPPER_SCRIPT"
-echo "✅ Created wrapper script: $WRAPPER_SCRIPT"
+# Step 6: Claude command - using venv Python directly
+VENV_PYTHON="$(cd "$PROJECT_ROOT" && pwd)/.venv/bin/python"
+BRIDGE_PATH="$(cd "$TARGET_DIR" && pwd)/mcp-http-bridge.py"
+ENV_PATH="$(cd "$MCP_FOLDER" && pwd)"
 
-# Step 7: Claude command - now using the wrapper
 read -p "🤖 Do you want to register this MCP in Claude now? (y/n): " CONFIRM
 if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
   echo ""
   echo "💡 Running Claude registration..."
-  # Use absolute paths for Claude
-  BRIDGE_PATH="$(cd "$TARGET_DIR" && pwd)/run-${MCP_NAME}.sh"
-  ENV_PATH="$(cd "$MCP_FOLDER" && pwd)"
   
-  claude mcp add "$MCP_NAME" "$BRIDGE_PATH" "$MCP_URL" "$ENV_PATH"
+  # Use the virtual environment's Python directly
+  claude mcp add "$MCP_NAME" "$VENV_PYTHON" "$BRIDGE_PATH" "$MCP_URL" "$ENV_PATH"
   
   echo ""
-  echo "✅ MCP '$MCP_NAME' registered with Claude!"
+  echo "✅ MCP '$MCP_NAME' registered with Claude using virtual environment!"
 else
   echo ""
   echo "👉 To register manually later, run:"
-  BRIDGE_PATH="$(cd "$TARGET_DIR" && pwd)/run-${MCP_NAME}.sh"
-  ENV_PATH="$(cd "$MCP_FOLDER" && pwd)"
-  echo "claude mcp add $MCP_NAME $BRIDGE_PATH $MCP_URL $ENV_PATH"
+  echo "claude mcp add $MCP_NAME $VENV_PYTHON $BRIDGE_PATH $MCP_URL $ENV_PATH"
 fi
 
 echo ""
