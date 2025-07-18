@@ -1,132 +1,142 @@
-#!/bin/bash
+#!/usr/bin/env python3
+"""
+Claude MCP HTTP Bridge
+- Loads secrets from .env
+- Dynamically fetches tool list from remote MCP
+"""
 
-echo "🚀 Claude Remote MCP Setup Wizard"
+import sys
+import os
+import json
+import urllib.request
+import ssl
+from dotenv import load_dotenv
 
-cd "$(dirname "$0")"
-SCRIPT_DIR="$(pwd)"
-PROJECT_ROOT="$(pwd)/.."
-TARGET_DIR="$PROJECT_ROOT/.claude/mcp"
+# === Load .env from folder path (arg3) or cwd ===
+env_dir = os.path.abspath(sys.argv[2]) if len(sys.argv) >= 3 else os.getcwd()
+env_path = os.path.join(env_dir, ".env")
+print(f"DEBUG: loading .env from → {env_path}", file=sys.stderr)
+load_dotenv(dotenv_path=env_path, verbose=True)
 
-echo ""
-# Step 0: Set up virtualenv
-if [ ! -d "$PROJECT_ROOT/.venv" ]; then
-  echo "📦 Creating Python virtual environment..."
-  python3 -m venv "$PROJECT_ROOT/.venv"
-else
-  echo "✅ Using existing virtualenv at .venv/"
-fi
+# === Load secrets ===
+server_url = os.getenv("MCP_URL") or (sys.argv[1] if len(sys.argv) >= 2 else None)
+api_key = os.getenv("MCP_API_KEY")
 
-# Step 0.1: Activate venv
-echo "🔄 Activating virtual environment..."
-source "$PROJECT_ROOT/.venv/bin/activate"
+print("DEBUG: MCP_URL =", server_url, file=sys.stderr)
+print("DEBUG: MCP_API_KEY =", "************" if api_key else None, file=sys.stderr)
 
-# Step 0.2: Ensure python-dotenv is installed IN THE VENV
-echo "📦 Checking python-dotenv..."
-if ! python -c "import dotenv" &> /dev/null; then
-  echo "📦 Installing python-dotenv in virtual environment..."
-  pip install python-dotenv
-  
-  # Verify installation
-  if python -c "import dotenv; print('✅ python-dotenv installed successfully')"; then
-    echo ""
-  else
-    echo "❌ Failed to install python-dotenv"
-    exit 1
-  fi
-else
-  echo "✅ python-dotenv already installed"
-fi
+if not server_url or not api_key:
+    print(json.dumps({"error": "Missing MCP_URL or MCP_API_KEY"}))
+    sys.exit(1)
 
-echo ""
+ssl_context = ssl.create_default_context()
 
-# Step 1: Ensure .claude/mcp/ exists
-mkdir -p "$TARGET_DIR"
-echo "✅ Ensured MCP folder at: $TARGET_DIR"
+def main():
+    while True:
+        try:
+            line = sys.stdin.readline()
+            if not line:
+                break
 
-# Step 2: Copy the bridge script
-if [ ! -f "$TARGET_DIR/mcp-http-bridge.py" ]; then
-  cp mcp/mcp-http-bridge.py "$TARGET_DIR/"
-  echo "📦 Copied mcp-http-bridge.py to .claude/mcp/"
-else
-  echo "✅ Bridge already present"
-fi
+            line = line.strip()
+            if not line:
+                continue
 
-# Step 3: Prompt for MCP
-read -p "📛 MCP name (e.g. airtable): " MCP_NAME
-read -p "🌐 MCP URL: " MCP_URL
-read -p "🔑 MCP API Key: " MCP_API_KEY
+            request = json.loads(line)
+            method = request.get("method", "")
 
-EXTRA_SECRETS=()
-while true; do
-  read -p "➕ Add a service-specific secret (key=value) or press Enter to continue: " PAIR
-  [[ -z "$PAIR" ]] && break
-  EXTRA_SECRETS+=("$PAIR")
-done
+            if method == "initialize":
+                print(json.dumps({
+                    "jsonrpc": "2.0",
+                    "id": request.get("id"),
+                    "result": {
+                        "protocolVersion": request.get("params", {}).get("protocolVersion", "2024-11-05"),
+                        "capabilities": {"tools": {}, "resources": {}, "prompts": {}},
+                        "serverInfo": {"name": "Claude MCP HTTP Bridge", "version": "1.1.0"}
+                    }
+                }))
+                sys.stdout.flush()
+                continue
 
-# Step 4: Write .env
-MCP_FOLDER="$TARGET_DIR/$MCP_NAME"
-mkdir -p "$MCP_FOLDER"
-ENV_FILE="$MCP_FOLDER/.env"
+            if method in ["prompts/list", "resources/list"]:
+                print(json.dumps({
+                    "jsonrpc": "2.0",
+                    "id": request.get("id"),
+                    "result": {"prompts": [] if "prompts" in method else {"resources": []}}
+                }))
+                sys.stdout.flush()
+                continue
 
-echo "MCP_URL=$MCP_URL" > "$ENV_FILE"
-[ -n "$MCP_API_KEY" ] && echo "MCP_API_KEY=$MCP_API_KEY" >> "$ENV_FILE"
-for secret in "${EXTRA_SECRETS[@]}"; do echo "$secret" >> "$ENV_FILE"; done
+            if method == "tools/list":
+                try:
+                    headers = {
+                        "Content-Type": "application/json",
+                        "X-API-Key": api_key
+                    }
+                    req = urllib.request.Request(server_url, data=b"{}", headers=headers, method="POST")
+                    with urllib.request.urlopen(req, context=ssl_context, timeout=30) as resp:
+                        remote_response = json.loads(resp.read().decode("utf-8"))
 
-# Step 5: Summary
-echo ""
-echo "✅ Created .env at: $ENV_FILE"
-echo "-----------------------------"
-cat "$ENV_FILE"
-echo "-----------------------------"
+                    tools = remote_response.get("tools") or remote_response.get("result", {}).get("tools", [])
 
-# Step 6: Claude command - CRITICAL FIX HERE!
-read -p "🤖 Do you want to register this MCP in Claude now? (y/n): " CONFIRM
-if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
-  echo ""
-  echo "💡 Running Claude registration..."
-  
-  # CRITICAL: Change to project root and use virtual environment Python with absolute paths
-  cd "$PROJECT_ROOT"
-  
-  # This is the correct command format that MUST be used
-  claude mcp add "$MCP_NAME" "$(pwd)/.venv/bin/python" "$(pwd)/.claude/mcp/mcp-http-bridge.py" "$MCP_URL" "$(pwd)/.claude/mcp/$MCP_NAME/"
-  
-  echo ""
-  echo "✅ MCP '$MCP_NAME' registered with Claude using virtual environment!"
-  echo ""
-  echo "🔍 Registered with command:"
-  echo "   claude mcp add $MCP_NAME \"$(pwd)/.venv/bin/python\" \"$(pwd)/.claude/mcp/mcp-http-bridge.py\" \"$MCP_URL\" \"$(pwd)/.claude/mcp/$MCP_NAME/\""
-else
-  echo ""
-  echo "👉 To register manually later, run from project root:"
-  echo ""
-  echo "cd $PROJECT_ROOT"
-  echo "claude mcp add $MCP_NAME \"\$(pwd)/.venv/bin/python\" \"\$(pwd)/.claude/mcp/mcp-http-bridge.py\" \"$MCP_URL\" \"\$(pwd)/.claude/mcp/$MCP_NAME/\""
-fi
+                    print(json.dumps({
+                        "jsonrpc": "2.0",
+                        "id": request.get("id"),
+                        "result": { "tools": tools or [] }
+                    }))
+                    sys.stdout.flush()
+                except Exception as e:
+                    print(json.dumps({
+                        "jsonrpc": "2.0",
+                        "id": request.get("id"),
+                        "error": {
+                            "code": -32603,
+                            "message": f"Failed to fetch remote tools: {str(e)}"
+                        }
+                    }))
+                    sys.stdout.flush()
+                continue
 
-echo ""
-echo "🎉 Done! MCP '$MCP_NAME' is ready to use in Claude."
+            if method == "tools/call":
+                params = request.get("params", {})
+                if params.get("name") == "call":
+                    args = params.get("arguments", {})
+                    payload = {"tool": args.get("tool"), "inputs": args.get("inputs", {})}
+                else:
+                    payload = {"tool": params.get("name"), "inputs": params.get("arguments", {})}
 
-# Step 7: Move to project root
-echo ""
-echo "📍 Moving to project root directory..."
-cd "$PROJECT_ROOT"
+                data = json.dumps(payload).encode("utf-8")
+                headers = {
+                    "Content-Type": "application/json",
+                    "X-API-Key": api_key
+                }
 
-# Step 8: Ask about removing the setup folder
-echo ""
-read -p "🗑️  Do you want to remove the claude-code-mcp-guide setup folder? (y/n): " REMOVE_CONFIRM
-if [[ "$REMOVE_CONFIRM" =~ ^[Yy]$ ]]; then
-  echo "🧹 Removing claude-code-mcp-guide folder..."
-  rm -rf "$SCRIPT_DIR"
-  echo "✅ Setup folder removed. You're now in: $(pwd)"
-else
-  echo "📁 Keeping claude-code-mcp-guide folder for future reference."
-  echo "📍 You're now in: $(pwd)"
-fi
+                req = urllib.request.Request(server_url, data=data, headers=headers, method="POST")
+                with urllib.request.urlopen(req, context=ssl_context, timeout=30) as resp:
+                    result = json.loads(resp.read().decode("utf-8"))
 
-echo ""
-echo "👋 All done! Your MCP is configured and ready to use."
-echo ""
-echo "⚠️  IMPORTANT: Always use the virtual environment Python!"
-echo "   Correct: \"\$(pwd)/.venv/bin/python\""
-echo "   Wrong: \"python3\" or \"python\""
+                print(json.dumps({
+                    "jsonrpc": "2.0",
+                    "id": request.get("id"),
+                    "result": result.get("result", result)
+                }))
+                sys.stdout.flush()
+
+        except KeyboardInterrupt:
+            # Clean exit on Ctrl+C or when Claude shuts down
+            print("DEBUG: Bridge shutting down gracefully", file=sys.stderr)
+            sys.exit(0)
+        except Exception as e:
+            print(json.dumps({
+                "jsonrpc": "2.0",
+                "id": request.get("id", None),
+                "error": {"code": -32603, "message": str(e)}
+            }))
+            sys.stdout.flush()
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        # Clean exit without traceback
+        sys.exit(0)
