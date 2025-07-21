@@ -73,13 +73,13 @@ if [[ -z "$MCP_NAME" ]]; then
 fi
 
 read -p "🌐 MCP URL (e.g. https://your-mcp-server.com/): " MCP_URL
-read -p "🔑 MCP API Key: " MCP_API_KEY
+read -p "🔑 MCP API Key (for x-api-key header): " MCP_API_KEY
 
 # Collect service-specific environment variables
 echo ""
 echo "📝 Add service-specific environment variables"
 echo "   Examples:"
-echo "   - For Airtable: AIRTABLE_BASE_ID=appXXXX"
+echo "   - For Airtable: AIRTABLE_API_KEY=patXXXX, baseId=appXXXX"
 echo "   - For AWS: AWS_ACCESS_KEY_ID=AKIAXXXX, AWS_SECRET_ACCESS_KEY=xxxx, AWS_DEFAULT_REGION=us-east-1"
 echo "   - For Supabase: SUPABASE_URL=https://xxx.supabase.co, SUPABASE_SERVICE_ROLE_KEY=xxx"
 echo ""
@@ -94,7 +94,7 @@ while true; do
   fi
 done
 
-# Step 4: Write .env
+# Step 4: Write .env (for bridge-based MCPs)
 MCP_FOLDER="$TARGET_DIR/$MCP_NAME"
 mkdir -p "$MCP_FOLDER"
 ENV_FILE="$MCP_FOLDER/.env"
@@ -114,7 +114,85 @@ echo "────────────────────────�
 cat "$ENV_FILE"
 echo "────────────────────────────────────────────────────────"
 
-# Step 6: Update .gitignore
+# Step 6: Update or create .mcp.json
+MCP_JSON_FILE="$PROJECT_ROOT/.mcp.json"
+echo ""
+echo "📄 Updating .mcp.json configuration..."
+
+# Create Python script to update JSON
+cat > /tmp/update_mcp_json.py << EOPYTHON
+import json
+import sys
+import os
+
+config_file = sys.argv[1]
+mcp_name = sys.argv[2]
+mcp_url = sys.argv[3]
+mcp_api_key = sys.argv[4] if len(sys.argv) > 4 else ""
+
+# Parse extra vars from remaining arguments
+extra_vars = {}
+for i in range(5, len(sys.argv)):
+    if '=' in sys.argv[i]:
+        key, value = sys.argv[i].split('=', 1)
+        extra_vars[key] = value
+
+# Read existing configuration or create new
+if os.path.exists(config_file):
+    with open(config_file, 'r') as f:
+        config = json.load(f)
+else:
+    config = {}
+
+# Ensure mcpServers key exists
+if "mcpServers" not in config:
+    config["mcpServers"] = {}
+
+# Create the MCP configuration
+mcp_config = {
+    "type": "sse",
+    "url": mcp_url
+}
+
+# Add headers if API key provided
+if mcp_api_key:
+    mcp_config["headers"] = {
+        "x-api-key": mcp_api_key
+    }
+
+# Add env vars if any
+if extra_vars:
+    mcp_config["env"] = extra_vars
+
+# Add to config
+config["mcpServers"][mcp_name] = mcp_config
+
+# Write updated configuration
+with open(config_file, 'w') as f:
+    json.dump(config, f, indent=2)
+
+print(json.dumps(mcp_config, indent=2))
+EOPYTHON
+
+# Run the Python script with all parameters
+python /tmp/update_mcp_json.py "$MCP_JSON_FILE" "$MCP_NAME" "$MCP_URL" "$MCP_API_KEY" "${EXTRA_VARS[@]}"
+
+if [ $? -eq 0 ]; then
+    echo "✅ Updated .mcp.json with $MCP_NAME configuration"
+    echo ""
+    echo "📋 Full .mcp.json contents:"
+    echo "────────────────────────────────────────────────────────"
+    cat "$MCP_JSON_FILE"
+    echo ""
+    echo "────────────────────────────────────────────────────────"
+else
+    echo "❌ Failed to update .mcp.json"
+fi
+
+# Clean up
+rm -f /tmp/update_mcp_json.py
+
+# Step 7: Update .gitignore
 if [ -f "$PROJECT_ROOT/.gitignore" ]; then
   # Check if .env is already ignored
   if ! grep -q "^\.env$" "$PROJECT_ROOT/.gitignore" && ! grep -q "^\*\.env$" "$PROJECT_ROOT/.gitignore"; then
@@ -141,12 +219,13 @@ EOF
   echo "✅ Created .gitignore with .env exclusions"
 fi
 
-# Step 7: Claude registration
+# Step 8: Claude registration
 echo ""
 echo "🤖 Claude Code MCP Registration"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "To use this MCP in Claude Code, you need to register it."
+echo "Your MCP has been configured in .mcp.json"
+echo "Claude Code will automatically load it when you start claude in this directory."
 echo ""
 
 # Check for known compatibility issues
@@ -160,87 +239,70 @@ if [[ -n "$COMPATIBILITY_NOTE" ]]; then
   echo ""
 fi
 
-read -p "Do you want to register this MCP in Claude Code now? (y/n): " CONFIRM
+# Ask if user wants to register bridge-based MCP (for local testing)
+read -p "Do you also want to register a bridge-based version for testing? (y/n): " CONFIRM
 if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
   echo ""
-  echo "💡 Running Claude registration..."
+  echo "💡 Running Claude registration for bridge..."
   
   cd "$PROJECT_ROOT"
   
   # Register with Claude Code
   # The bridge will load the .env from the specified folder
-  claude mcp add "$MCP_NAME" \
+  claude mcp add "${MCP_NAME}-bridge" \
     "$(pwd)/.venv/bin/python" \
     "$(pwd)/.claude/mcp/mcp-http-bridge.py" \
     "$(pwd)/.claude/mcp/$MCP_NAME/"
   
   if [ $? -eq 0 ]; then
     echo ""
-    echo "✅ MCP '$MCP_NAME' registered successfully with Claude Code!"
+    echo "✅ Bridge MCP '${MCP_NAME}-bridge' registered successfully!"
     echo ""
     echo "🔍 Registration details:"
-    echo "   Name: $MCP_NAME"
+    echo "   Name: ${MCP_NAME}-bridge"
     echo "   Python: $(pwd)/.venv/bin/python"
     echo "   Bridge: $(pwd)/.claude/mcp/mcp-http-bridge.py"
     echo "   Config: $(pwd)/.claude/mcp/$MCP_NAME/.env"
     echo ""
     echo "📝 To verify: claude mcp list"
-    echo "🧪 To test: claude mcp test $MCP_NAME"
+    echo "🧪 To test: claude mcp test ${MCP_NAME}-bridge"
   else
     echo ""
-    echo "⚠️  Registration may have failed. Try manual registration below."
+    echo "⚠️  Bridge registration may have failed."
   fi
-else
-  echo ""
-  echo "📝 Manual Registration Instructions"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
-  echo "To register this MCP manually, run the following command from your project root:"
-  echo ""
-  echo "cd $PROJECT_ROOT"
-  echo ""
-  echo "claude mcp add $MCP_NAME \\"
-  echo "  \"$(pwd)/.venv/bin/python\" \\"
-  echo "  \"$(pwd)/.claude/mcp/mcp-http-bridge.py\" \\"
-  echo "  \"$(pwd)/.claude/mcp/$MCP_NAME/\""
-  echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
-  echo "After registration:"
-  echo "- Verify with: claude mcp list"
-  echo "- Test with: claude mcp test $MCP_NAME"
-  echo "- Remove with: claude mcp remove $MCP_NAME"
 fi
 
-# Step 8: Usage instructions
+# Step 9: Usage instructions
 echo ""
 echo "🎉 Setup Complete!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "📚 How it works:"
-echo "   1. Your MCP secrets are stored in: .claude/mcp/$MCP_NAME/.env"
-echo "   2. The bridge script loads these secrets using python-dotenv"
-echo "   3. Claude Code uses your virtual environment Python"
-echo "   4. All communication goes through your secure MCP server"
+echo "📚 Your MCP is configured in two ways:"
+echo "   1. Native SSE in .mcp.json (recommended)"
+echo "   2. Bridge-based in .env (optional, for testing)"
+echo ""
+echo "🚀 To use your MCP:"
+echo "   1. Start Claude Code: claude"
+echo "   2. Check status: /mcp"
+echo "   3. Your $MCP_NAME tools will be available"
 echo ""
 echo "🔧 Troubleshooting:"
-echo "   - Connection issues: Check your MCP_URL and MCP_API_KEY"
-echo "   - Module errors: Make sure you're using the venv Python"
-echo "   - List all MCPs: claude mcp list"
-echo "   - View logs: claude mcp logs $MCP_NAME"
+echo "   - Connection issues: Check your MCP_URL and API key"
+echo "   - View .mcp.json: cat .mcp.json"
+echo "   - Test specific MCP: /mcp and select your server"
 echo ""
 echo "🔐 Security notes:"
-echo "   - Never commit .env files (they're gitignored)"
+echo "   - Never commit .env files or .mcp.json with real keys"
 echo "   - Keep your API keys secure"
 echo "   - Each MCP has isolated credentials"
 
-# Step 9: Move to project root
+# Step 10: Move to project root
 echo ""
 echo "📍 Moving to project root directory..."
 cd "$PROJECT_ROOT"
 echo "📍 You're now in: $(pwd)"
 
-# Step 10: Ask about removing the setup folder
+# Step 11: Ask about removing the setup folder
 echo ""
 read -p "🗑️  Do you want to remove the claude-remote-mcp setup folder? (y/n): " REMOVE_CONFIRM
 if [[ "$REMOVE_CONFIRM" =~ ^[Yy]$ ]]; then
