@@ -1,21 +1,22 @@
+
 # Claude Remote MCP Bridge
 
 Connect Claude Code to any remote MCP (Model Context Protocol) server with secure credential management.
 
 ## 🎯 What This Does
 
-This tool enables Claude Code to interact with remote MCP servers (like Airtable, AWS, Supabase, etc.) through a secure HTTP bridge. Your API keys and credentials stay local on your machine and are never exposed.
+This tool enables Claude Code to interact with remote MCP servers (like Airtable, AWS, Supabase, etc.) through either HTTP connections or a secure Python bridge. Your API keys and credentials stay secure and are properly managed based on your chosen connection method.
 
 ## 🚀 Quick Start
 
 1. Clone this repository into your project:
    ```bash
-   git clone https://github.com/majkonautic/claude-remote-mcp.git
+   git clone https://github.com/majkonautic/claude-code-mcp-guide.git
    ```
 
 2. Run the setup wizard:
    ```bash
-   cd claude-remote-mcp
+   cd claude-code-mcp-guide
    ./add_remote_mcp.sh
    ```
 
@@ -29,128 +30,120 @@ This tool enables Claude Code to interact with remote MCP servers (like Airtable
 - Python 3.6 or higher
 - Claude Code CLI (`npm install -g @anthropic-ai/claude-code`)
 
+## 🔌 Connection Methods
+
+### HTTP Server (Recommended for Remote Servers)
+Direct connection to remote MCP servers using HTTP protocol with header-based authentication.
+
+### Bridge Server (For Local Testing)
+Python-based bridge that reads credentials from local `.env` files.
+
+### Both
+Configure both methods for maximum flexibility.
+
 ## 📁 Project Structure
 
 After setup:
 ```
 your-project/
-├── .venv/                    # Python virtual environment
+├── .venv/                        # Python virtual environment
+├── .mcp.json                     # HTTP server configurations
 ├── .claude/
 │   └── mcp/
 │       ├── mcp-http-bridge.py    # Universal bridge script
 │       ├── airtable/
-│       │   └── .env              # Airtable credentials
+│       │   └── .env              # Airtable credentials (bridge mode)
 │       └── aws/
-│           └── .env              # AWS credentials
-└── .gitignore                    # Auto-updated to exclude .env files
+│           └── .env              # AWS credentials (bridge mode)
+└── .gitignore                    # Auto-updated to exclude sensitive files
 ```
 
 ## 🛠️ How It Works
 
-1. **Setup Script** (`add_remote_mcp.sh`):
-   - Creates a Python virtual environment
-   - Installs required dependencies (python-dotenv)
-   - Sets up the bridge script in `.claude/mcp/`
-   - Stores your credentials securely in `.env` files
-   - Registers the MCP with Claude Code
+### Setup Script (`add_remote_mcp.sh`)
+- Creates a Python virtual environment
+- Installs required dependencies (python-dotenv)
+- Allows you to choose between HTTP, Bridge, or Both connection methods
+- Stores configurations in `.mcp.json` (HTTP) or `.env` files (Bridge)
+- Supports adding multiple MCP servers in one session
+- Automatically updates `.gitignore` for security
 
-2. **Universal HTTP Bridge** (`mcp-http-bridge.py`):
-   - Translates between Claude's MCP protocol and remote servers
-   - Loads credentials from local `.env` files
-   - Auto-detects server types (standard MCP vs custom APIs)
-   - Handles authentication via `X-API-Key` header
-   - Supports environment variable passthrough
+### HTTP Mode Configuration
+Stores configuration in `.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "airtable": {
+      "type": "http",
+      "url": "https://your-mcp-server.com/",
+      "headers": {
+        "x-api-key": "your-mcp-api-key",
+        "x-airtable-api-key": "patXXXXXXXXXXXX",
+        "x-airtable-base-id": "appXXXXXXXXXXXX"
+      }
+    }
+  }
+}
+```
 
-3. **Security**:
-   - API keys stored locally in `.env` files
-   - `.gitignore` automatically updated
-   - Each MCP has isolated credentials
-   - No credentials sent to Claude
-
-## 📚 Supported Services
-
-### ✅ Airtable
-Full support for all Airtable operations:
-- List/search records
-- Create/update/delete records
-- List bases and tables
-- Create tables and fields
-
-Example `.env`:
+### Bridge Mode Configuration
+Uses local `.env` files:
 ```bash
-MCP_URL=https://your-airtable-mcp.com/
-MCP_API_KEY=your-api-key
+MCP_URL=https://your-mcp-server.com/
+MCP_API_KEY=your-mcp-api-key
 AIRTABLE_API_KEY=patXXXXXXXXXXXX
 AIRTABLE_BASE_ID=appXXXXXXXXXXXX
 ```
 
-### ⚠️ AWS
-Limited support (non-standard API):
-- S3: List buckets, list objects
-- EC2: Describe/start/stop instances
-- Lambda: Invoke functions
-- CloudWatch: Get logs
-- IAM: Get identity, assume role
-
-Example `.env`:
-```bash
-MCP_URL=https://your-aws-mcp.com/
-MCP_API_KEY=your-api-key
-AWS_ACCESS_KEY_ID=AKIAXXXXXXXXX
-AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxx
-AWS_DEFAULT_REGION=us-east-1
-```
-
-### 🔜 Coming Soon
-- Supabase
-- Google Sheets
-- Firebase
-- Stripe
 
 ## 🔧 Troubleshooting
 
-### Connection Timeout
-```
-Error: Connection to MCP server "name" timed out
-```
-- Ensure all print statements in bridge have `flush=True`
-- Check you're in the project root when running Claude
-- Verify the bridge script has execute permissions
-
-### Invalid API Key (403)
-```
-Error: Remote MCP server error (HTTP 403): {"error":"Invalid API Key"}
-```
-- Verify `X-API-Key` header is expected by server
-- Check API key in `.env` file
-- Some servers may expect different header names
-
-### No Tools Available
-- Check if server implements standard MCP protocol
-- AWS servers use custom format (handled automatically)
-- Run `claude mcp test your-mcp-name` to debug
-
-### Testing Manually
+### Testing Your Connection
 ```bash
-# Test the bridge directly
-source .venv/bin/activate
-python .claude/mcp/mcp-http-bridge.py .claude/mcp/airtable/
+# Test with curl (HTTP mode)
+curl -X POST https://your-mcp-server.com/ \
+  -H 'Content-Type: application/json' \
+  -H 'X-API-Key: your-mcp-api-key' \
+  -H 'X-Airtable-API-Key: patXXXXXXXXXXXX' \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tools/list",
+    "id": 1
+  }'
 
-# In another terminal, check the .env was loaded
-cat .claude/mcp/airtable/.env
+# Test Claude connection
+claude mcp list
+/mcp  # Inside Claude Code
 ```
+
+### Common Issues
+
+#### Invalid Content Type (SSE vs HTTP)
+- Error: `SSE error: Invalid content type, expected "text/event-stream"`
+- Solution: Change `"type": "sse"` to `"type": "http"` in `.mcp.json`
+
+#### Authentication Failed
+- Error: `AUTHENTICATION_REQUIRED`
+- Solution: Verify your API keys are correct and properly formatted
+- For Airtable: Token format is `patXXXXX.XXXXXXXXXXXXXXXXXX`
+
+#### Connection Timeout
+- Ensure your MCP server implements the `initialize` method
+- Check server logs for any startup errors
+- Verify URL is accessible from your location
 
 ## 🤖 Using in Claude Code
 
-Once registered, just ask Claude:
+Once configured, just ask Claude:
 ```
-I have an Airtable MCP configured. Please list all records in my Tasks table.
+List all tables in my Airtable base
+
+Show me records from the Marketing Campaigns table
+
+Create a new campaign with test data
 ```
 
-Or for AWS:
-```
-I have an AWS MCP set up. Can you list my S3 buckets?
-```
+Claude will automatically use the appropriate MCP server based on your request.
 
 ## 🧰 MCP Management Commands
 
@@ -161,78 +154,78 @@ claude mcp list
 # Test an MCP connection
 claude mcp test your-mcp-name
 
-# View MCP logs
-claude mcp logs your-mcp-name
+# View connection status in Claude
+/mcp
 
 # Remove an MCP
 claude mcp remove your-mcp-name
 
-# Remove from specific scope
-claude mcp remove your-mcp-name -s local
-claude mcp remove your-mcp-name -s project
+# Check your configuration
+cat .mcp.json
 ```
 
 ## 🔐 Security Best Practices
 
-1. **Never commit `.env` files** - They're automatically gitignored
+1. **Never commit sensitive files** - `.mcp.json` and `.env` are automatically gitignored
 2. **Use minimal permissions** - Only grant what's needed
 3. **Rotate API keys** - Every 90 days recommended
-4. **Monitor usage** - Check your provider's logs
-5. **One service per MCP** - Isolate credentials
+4. **Use environment-specific configs** - Different keys for dev/staging/prod
+5. **Monitor usage** - Check your provider's logs regularly
 
-## 🛠️ Manual Setup
+## 🛠️ Advanced Configuration
 
-If you prefer manual setup over the wizard:
-
-```bash
-# 1. Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-pip install python-dotenv
-
-# 2. Set up MCP directory
-mkdir -p .claude/mcp/my-service
-cp claude-remote-mcp/mcp/mcp-http-bridge.py .claude/mcp/
-
-# 3. Create .env file
-cat > .claude/mcp/my-service/.env << EOF
-MCP_URL=https://my-service-mcp.com/
-MCP_API_KEY=my-api-key
-SERVICE_SPECIFIC_KEY=value
-EOF
-
-# 4. Register with Claude
-claude mcp add my-service \
-  "$(pwd)/.venv/bin/python" \
-  "$(pwd)/.claude/mcp/mcp-http-bridge.py" \
-  "$(pwd)/.claude/mcp/my-service/"
-```
-
-## 📝 Creating Your Own MCP Server
-
-MCP servers should implement:
-- `initialize` - Protocol handshake
-- `tools/list` - Return available tools
-- `tools/call` - Execute tool with parameters
-
-Expected response format:
+### Custom Headers
+Your MCP server can read any headers you configure:
 ```json
-{
-  "tools": [
-    {
-      "name": "tool_name",
-      "description": "What this tool does",
-      "inputSchema": {
-        "type": "object",
-        "properties": {...},
-        "required": [...]
-      }
-    }
-  ]
+"headers": {
+  "x-api-key": "server-auth-key",
+  "x-custom-header": "custom-value",
+  "x-service-token": "service-specific-token"
 }
 ```
 
-Authentication should use `X-API-Key` header.
+### Environment Variables (Bridge Mode)
+The bridge passes all variables from `.env` to the MCP server process.
+
+### Multiple Environments
+Create different `.mcp.json` files for different environments:
+- `.mcp.json` - Local development (gitignored)
+- `.mcp.staging.json` - Staging environment
+- `.mcp.prod.json` - Production environment
+
+## 📝 Creating Your Own MCP Server
+
+Your server should handle these JSON-RPC methods:
+
+```javascript
+// Required: Protocol initialization
+{
+  "jsonrpc": "2.0",
+  "method": "initialize",
+  "params": { "protocolVersion": "2024-11-05" },
+  "id": 1
+}
+
+// Required: List available tools
+{
+  "jsonrpc": "2.0",
+  "method": "tools/list",
+  "id": 2
+}
+
+// Required: Execute tool
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "tool_name",
+    "arguments": { ... }
+  },
+  "id": 3
+}
+```
+
+Response format must be JSON-RPC 2.0 compliant.
 
 ## 🤝 Contributing
 
@@ -243,10 +236,10 @@ Contributions welcome! Please:
 4. Submit a pull request
 
 Areas for contribution:
-- Additional service examples
-- Bridge improvements
-- Documentation
-- Test scripts
+- Additional service integrations
+- Improved error handling
+- Documentation improvements
+- Example MCP server implementations
 
 ## 📄 License
 
@@ -255,7 +248,7 @@ MIT License - see LICENSE file for details
 ## 🙏 Acknowledgments
 
 - Built for the Claude Code community
-- Thanks to @bartoszmajewski for extensive testing
+- Thanks to @bartoszmajewski for extensive testing and feedback
 - Inspired by the Model Context Protocol specification
 
 ---
