@@ -321,6 +321,17 @@ def main():
                 print(json.dumps(response), flush=True)
                 logging.info(f"Tool {tool_name} executed successfully")
 
+            elif method == "prompts/list":
+                # Handle prompts/list request
+                logging.info("Handling prompts/list request")
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {"prompts": []}
+                }
+                print(json.dumps(response), flush=True)
+                logging.info("Returned empty prompts list")
+
             else:
                 # Unknown method
                 response = {
