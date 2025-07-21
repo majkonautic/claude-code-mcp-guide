@@ -80,7 +80,7 @@ When you choose the bridge option, you get a sophisticated architecture:
 
 ```
 ┌─────────────────┐    HTTP Headers     ┌─────────────────┐    Spawn Process    ┌─────────────────┐
-│   Claude Code   │ ──────────────────> │  MCP Server     │ ─────────────────> │ airtable-mcp-   │
+│   Claude Code   │ ──────────────────> │  MCP Server     │ ─────────────────>  │ airtable-mcp-   │
 │   + Bridge      │   (User API Keys)   │  (Docker)       │   (With User Creds) │ server          │
 └─────────────────┘                     └─────────────────┘                     └─────────────────┘
 ```
