@@ -169,9 +169,18 @@ def try_api_endpoints(method, params=None):
 
             headers = {
                 "Content-Type": "application/json",
-                "X-API-Key": api_key,
+                "x-api-key": api_key,  # Changed to lowercase
                 "User-Agent": "Claude-MCP-Bridge/1.0"
             }
+            
+            # Add Airtable credentials from environment
+            airtable_api_key = os.getenv("AIRTABLE_API_KEY")
+            airtable_base_id = os.getenv("baseId")  # Note: your .env uses "baseId"
+            
+            if airtable_api_key:
+                headers["x-airtable-api-key"] = airtable_api_key
+            if airtable_base_id:
+                headers["x-airtable-base-id"] = airtable_base_id
 
             req = urllib.request.Request(
                 url,
